@@ -51,15 +51,24 @@ function hasManyAttributes(node) {
   return nodeAttributeKeys(node).length >= 10;
 }
 
-function renderRadarCharts(cy, layer) {
+function renderRadarCharts(nodes, layer, cy) {
   if (!window.RadarChart) {
     return;
   }
 
   layer.innerHTML = "";
 
-  const visibleNodes = nodesInView(cy).toArray();
-  const chartNodes = visibleNodes.slice(0, 20);
+  let chartNodes = nodes.toArray();
+  if (cy && getZoomLevel(cy.zoom()) === 2) {
+    const existingIds = new Set(chartNodes.map((n) => n.id()));
+    const visibleNodes = nodesInView(cy)
+      .filter((n) => !existingIds.has(n.id()))
+      .toArray();
+    chartNodes = chartNodes.concat(visibleNodes);
+  }
+
+  chartNodes = chartNodes.slice(0, 20);
+  const chartSize = 80;
 
   chartNodes.forEach((node) => {
     const attrs = nodeAttributeKeys(node);
@@ -79,17 +88,17 @@ function renderRadarCharts(cy, layer) {
     const wrapper = document.createElement("div");
     wrapper.id = chartId;
     wrapper.className = "radar-chart-wrapper";
-    wrapper.style.width = "120px";
-    wrapper.style.height = "120px";
+    wrapper.style.width = `${chartSize}px`;
+    wrapper.style.height = `${chartSize}px`;
     wrapper.style.left = `${node.renderedPosition().x}px`;
     wrapper.style.top = `${node.renderedPosition().y}px`;
 
     layer.appendChild(wrapper);
 
     RadarChart(`#${chartId}`, [chartData], {
-      w: 120,
-      h: 120,
-      margin: { top: 10, right: 10, bottom: 10, left: 10 },
+      w: chartSize,
+      h: chartSize,
+      margin: { top: 6, right: 6, bottom: 6, left: 6 },
       levels: 3,
       maxValue: Math.max(1, d3.max(chartData, (d) => d.value)),
       roundStrokes: true,
@@ -111,7 +120,15 @@ function getZoomLevel(zoom) {
 }
 
 
-function updateZoomView(cy, layer) {
+function updateZoomView(cy, layer, semanticZoomEnabled = true) {
+  if (!semanticZoomEnabled) {
+    cy.batch(() => {
+      cy.nodes().show();
+      layer.innerHTML = "";
+    });
+    return;
+  }
+
   const level = getZoomLevel(cy.zoom());
 
   cy.batch(() => {
@@ -129,9 +146,55 @@ function updateZoomView(cy, layer) {
     } else {
       few.show();
       many.show();
-      renderRadarCharts(cy, layer);
+      renderRadarCharts(nodesInView(cy), layer, cy);
     }
   });
+}
+
+function getLensCircle() {
+  const lens = document.getElementById("lens");
+  if (!lens) {
+    return null;
+  }
+
+  return {
+    x: Number(lens.getAttribute("cx")) || 0,
+    y: Number(lens.getAttribute("cy")) || 0,
+    r: Number(lens.getAttribute("r")) || 0,
+  };
+}
+
+function nodesInLens(cy) {
+  const circle = getLensCircle();
+  if (!circle) {
+    return cy.collection();
+  }
+
+  return cy.nodes().filter((n) => {
+    const pos = n.renderedPosition();
+    const dx = pos.x - circle.x;
+    const dy = pos.y - circle.y;
+    return dx * dx + dy * dy <= circle.r * circle.r;
+  });
+}
+
+
+function updateLensEffects(cy, layer, lensMode) {
+  cy.nodes().removeClass("magic");
+  cy.edges().removeClass("magic");
+  layer.innerHTML = "";
+
+  if (lensMode === "star") {
+    const nodes = nodesInLens(cy);
+    nodes.addClass("magic");
+    renderRadarCharts(nodes, layer, cy);
+  } else if (lensMode === "edges") {
+    const nodes = nodesInLens(cy);
+    const connected = cy.edges().filter((edge) => {
+      return nodes.contains(edge.source()) || nodes.contains(edge.target());
+    });
+    connected.addClass("magic");
+  }
 }
 
 function styleNodes(cy) {
@@ -181,35 +244,73 @@ async function main() {
   cy.style(_style);
 
   const chartLayer = document.getElementById("chart-layer");
+  const lens = document.getElementById("lens");
+  const lensSvg = lens?.ownerSVGElement;
+  const lensRadiusInput = document.getElementById("lens-radius");
+  const lensRadiusValue = document.getElementById("lens-radius-value");
+  const semanticZoomCheckbox = document.getElementById("semantic-zoom");
+  const lensModeSelect = document.getElementById("lens-mode");
+  let semanticZoomEnabled = semanticZoomCheckbox?.checked ?? true;
+  let lensMode = lensModeSelect?.value || "star";
+
+  function setLensRadius(radius) {
+    if (lens) {
+      lens.setAttribute("r", String(radius));
+    }
+    if (lensRadiusValue) {
+      lensRadiusValue.textContent = String(radius);
+    }
+  }
+
+  if (lensRadiusInput) {
+    setLensRadius(Number(lensRadiusInput.value));
+    lensRadiusInput.addEventListener("input", () => {
+      setLensRadius(Number(lensRadiusInput.value));
+      updateLensEffects(cy, chartLayer, lensMode);
+    });
+  }
+
+  if (semanticZoomCheckbox) {
+    semanticZoomCheckbox.addEventListener("change", () => {
+      semanticZoomEnabled = semanticZoomCheckbox.checked;
+      updateZoomView(cy, chartLayer, semanticZoomEnabled);
+      updateLensEffects(cy, chartLayer, lensMode);
+    });
+  }
+
+  if (lensModeSelect) {
+    lensModeSelect.addEventListener("change", () => {
+      lensMode = lensModeSelect.value;
+      updateLensEffects(cy, chartLayer, lensMode);
+    });
+  }
+
   styleNodes(cy);
-  updateZoomView(cy, chartLayer);
+  updateZoomView(cy, chartLayer, semanticZoomEnabled);
   
-  cy.on("zoom", () => updateZoomView(cy, chartLayer));
+  cy.on("zoom", () => {
+    updateZoomView(cy, chartLayer, semanticZoomEnabled);
+  });
   cy.on("pan", _.throttle(() => {
-    if (getZoomLevel(cy.zoom()) === 2) {
-      renderRadarCharts(cy, chartLayer);
+    if (semanticZoomEnabled && getZoomLevel(cy.zoom()) === 2) {
+      renderRadarCharts(nodesInView(cy), chartLayer, cy);
     }
   }, 100));
 
-  cy.on("mousemove", _.throttle(e => {
-    const mouse = { x: e.originalEvent.x, y: e.originalEvent.y };
+  cy.on("mousemove", _.throttle((e) => {
+    const mouse = { x: e.originalEvent.clientX, y: e.originalEvent.clientY };
     console.log(`Mouse position: [x: ${mouse.x}, y: ${mouse.y}]`);
 
-    cy.nodes().forEach((n) => {
-      const node = n.renderedPosition(); // Careful: other position functions may invoke different coordinate systems
-
-      // console.log(`Node position: [x: ${node.x}, y: ${node.y}]`);
-    });
-    
-    /* 
-      Your code also goes here! 
-
-      HINTs: 
-        1. use the "isInCircle" function defined above to calculate whether a node is inside the lens! 
-        2. if you experience performance issues, use cy.startBatch() and cy.endBatch() to avoid unnecessary canvas redraws. See https://js.cytoscape.org/#cy.batch for more
-        3. see below how to get the mouse and node positions
-    */
-  }, 100));
+    if (lens && lensSvg && lensSvg.getScreenCTM) {
+      const pt = lensSvg.createSVGPoint();
+      pt.x = mouse.x;
+      pt.y = mouse.y;
+      const svgP = pt.matrixTransform(lensSvg.getScreenCTM().inverse());
+      lens.setAttribute("cx", svgP.x);
+      lens.setAttribute("cy", svgP.y);
+      updateLensEffects(cy, chartLayer, lensMode);
+    }
+  }, 10));
   
 }
 

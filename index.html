@@ -25,11 +25,22 @@
     <div id="chart-layer"></div>
 
     <div id="config" class="config">
-      <!-- 
+      <h2>Controls</h2>
 
-        your controls can go here  
+      <label for="lens-radius">Lens radius</label>
+      <input id="lens-radius" type="range" min="20" max="200" value="40" />
+      <span id="lens-radius-value">40</span>px
 
-      -->
+      <label for="semantic-zoom">
+        <input id="semantic-zoom" type="checkbox" checked />
+        Enable semantic zoom
+      </label>
+
+      <label for="lens-mode">Lens mode</label>
+      <select id="lens-mode">
+        <option value="star">Star plots</option>
+        <option value="edges">Edge highlight</option>
+      </select>
     </div>
     
   </body>

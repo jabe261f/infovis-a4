@@ -59,14 +59,21 @@ const _style = [{
 }, {
   "selector": "node.magic",
   "style": {
-    // your magic lens effects for nodes go here! 
-    // See https://js.cytoscape.org/#style for all options
+    "border-width": "4px",
+    "border-color": "#ffd700",
+    "border-opacity": "0.9",
+    "background-color": "#ffbf00",
+    "background-opacity": "0.7"
   }
 }, {
   "selector": "edge.magic",
   "style": {
-    // your magic lens effects for edges go here! 
-    // See https://js.cytoscape.org/#style for all options
+    "line-color": "#ffa500",
+    "width": "4px",
+    "opacity": "0.95",
+    "source-arrow-shape": "triangle",
+    "target-arrow-shape": "triangle",
+    "target-arrow-color": "#ffa500"
   }
 }]
 

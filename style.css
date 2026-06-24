@@ -1,5 +1,19 @@
 /* If you need to make some style changes to the plain html, this is the place! */
+#chart-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 12em;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 10;
+}
 
+.radar-chart-wrapper {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
 
 .cy {
   /* aligns the svg with the canvas */

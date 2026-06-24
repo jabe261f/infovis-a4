@@ -22,6 +22,22 @@ const _style = [{
     "z-index": "10"
   }
 }, {
+  "selector": "node.lowattr",
+  "style": {
+    "shape": "ellipse",
+    "background-color": "#1f77b4",
+    "border-width": "2px",
+    "border-color": "#0b3d6c"
+  }
+}, {
+  "selector": "node.highattr",
+  "style": {
+    "shape": "rectangle",
+    "background-color": "#ff7f0e",
+    "border-width": "2px",
+    "border-color": "#b15000"
+  }
+}, {
   "selector": "node:selected",
   "style": {
     "border-width": "6px",
